@@ -15,6 +15,10 @@ export function Home() {
   const [totalPages, setTotalPages] = useState(1);
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifications, setNotifications] = useState<any[]>([]);
+  
+  // Loading and error states
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // ---------------- logout ----------------
   const handleLogout = async () => {
@@ -43,21 +47,35 @@ export function Home() {
   // ---------------- fetch works ----------------
   useEffect(() => {
     const fetchWorks = async () => {
-      const start = (currentPage - 1) * worksPerPage;
-      const end = start + worksPerPage - 1;
+      setLoading(true);
+      setError(null);
+      
+      try {
+        const start = (currentPage - 1) * worksPerPage;
+        const end = start + worksPerPage - 1;
 
-      const { data } = await supabase
-        .from("videos")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .range(start, end);
+        const { data, error: fetchError } = await supabase
+          .from("videos")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .range(start, end);
 
-      const { count } = await supabase
-        .from("videos")
-        .select("id", { count: "exact", head: true });
+        if (fetchError) {
+          throw fetchError;
+        }
 
-      setWorks(data || []);
-      setTotalPages(Math.ceil((count || 0) / worksPerPage));
+        const { count } = await supabase
+          .from("videos")
+          .select("id", { count: "exact", head: true });
+
+        setWorks(data || []);
+        setTotalPages(Math.ceil((count || 0) / worksPerPage));
+      } catch (err: any) {
+        console.error("Fetch works error:", err);
+        setError(err.message || "Failed to load videos");
+      } finally {
+        setLoading(false);
+      }
     };
 
     fetchWorks();
@@ -175,10 +193,36 @@ export function Home() {
   }, []);
 
   // ---------------- loading fallback ----------------
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center">
+        <div className="w-12 h-12 border-2 border-orange-500 border-t-transparent rounded-full animate-spin mb-4" />
+        <div className="text-xl tracking-[0.2em] opacity-70">LOADING...</div>
+        <div className="text-sm opacity-50 mt-2">正在加载作品...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center">
+        <div className="text-xl tracking-[0.2em] text-red-400 mb-4">ERROR</div>
+        <div className="text-sm opacity-70 mb-6">{error}</div>
+        <button
+          onClick={() => window.location.reload()}
+          className="px-8 py-3 border border-orange-500/50 text-orange-400 rounded-lg hover:bg-orange-500/10 transition-colors"
+        >
+          重新加载
+        </button>
+      </div>
+    );
+  }
+
   if (!works.length) {
     return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center">
-        LOADING...
+      <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center">
+        <div className="text-xl tracking-[0.2em] opacity-70 mb-4">NO WORKS YET</div>
+        <div className="text-sm opacity-50">暂无作品，敬请期待...</div>
       </div>
     );
   }
